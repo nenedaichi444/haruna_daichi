@@ -1,0 +1,523 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ふたりの手帳 — やりたいことリスト</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Klee+One:wght@400;600&family=Zen+Maru+Gothic:wght@500;700&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-analytics-compat.js"></script>
+<style>
+:root{
+  --desk:#E6D3BC;
+  --desk-dark:#D8C0A4;
+  --paper:#FFFDF6;
+  --rule:#D5DFEA;
+  --margin:#F2B8B0;
+  --ink:#3A3533;
+  --pencil:#9C948F;
+  --stamp:#D8433F;
+  --tab-all:#F0DFA0;
+  --tab-food:#FFB98A;
+  --tab-out:#9CD3CB;
+  --tab-home:#B8D690;
+  --tab-event:#F2A5C4;
+  --sticky:#FFF2A8;
+}
+*{box-sizing:border-box}
+html,body{margin:0;padding:0}
+body{
+  min-height:100vh;
+  background:
+    radial-gradient(ellipse at 20% 0%, rgba(255,255,255,.35), transparent 55%),
+    linear-gradient(160deg,var(--desk) 0%,var(--desk-dark) 100%);
+  font-family:'Klee One','Zen Maru Gothic',sans-serif;
+  color:var(--ink);
+  display:flex;justify-content:center;
+  padding:56px 14px 90px;
+}
+/* wood grain hint */
+body::before{
+  content:"";position:fixed;inset:0;pointer-events:none;opacity:.18;
+  background-image:repeating-linear-gradient(90deg,transparent 0 38px,rgba(120,80,40,.10) 38px 41px,transparent 41px 63px,rgba(120,80,40,.06) 63px 65px);
+}
+
+.book{position:relative;width:100%;max-width:560px}
+
+/* ===== index tabs above the paper ===== */
+.tabs{
+  position:relative;display:flex;gap:6px;
+  padding:0 0 0 46px;z-index:2;
+}
+.tab{
+  border:none;font-family:'Zen Maru Gothic',sans-serif;font-weight:700;font-size:12.5px;
+  color:rgba(58,53,51,.75);
+  padding:9px 14px 16px;border-radius:12px 12px 0 0;
+  transform:translateY(8px);cursor:pointer;
+  box-shadow:0 -2px 6px rgba(70,40,20,.10);
+  transition:transform .18s cubic-bezier(.34,1.56,.64,1),color .18s;
+}
+.tab.all{background:var(--tab-all)}
+.tab.food{background:var(--tab-food)}
+.tab.out{background:var(--tab-out)}
+.tab.home{background:var(--tab-home)}
+.tab.event{background:var(--tab-event)}
+.tab.active{transform:translateY(0);color:var(--ink);padding-bottom:20px}
+.tab:hover{transform:translateY(2px)}
+.tab.active:hover{transform:translateY(0)}
+
+/* ===== the paper ===== */
+.paper{
+  position:relative;background:var(--paper);
+  border-radius:6px 14px 14px 6px;
+  padding:34px 26px 30px 64px;
+  box-shadow:
+    0 1px 0 #f3eee2, 0 3px 0 #ede6d6, 0 5px 0 #e6dcc9,
+    0 18px 30px rgba(70,40,20,.22);
+  z-index:1;
+}
+/* subtle paper grain */
+.paper::after{
+  content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:.35;mix-blend-mode:multiply;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .55 0 0 0 0 .5 0 0 0 0 .42 0 0 0 .08 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+/* red margin line */
+.paper::before{
+  content:"";position:absolute;top:0;bottom:0;left:52px;width:1.5px;background:var(--margin);opacity:.8;
+}
+/* spiral holes */
+.holes{position:absolute;left:14px;top:26px;bottom:26px;width:14px;display:flex;flex-direction:column;justify-content:space-between;pointer-events:none}
+.hole{
+  width:14px;height:14px;border-radius:50%;
+  background:radial-gradient(circle at 40% 40%,#c9b79e,#a48e73);
+  box-shadow:inset 0 2px 3px rgba(0,0,0,.35);
+  position:relative;
+}
+.hole::after{ /* ring */
+  content:"";position:absolute;left:-13px;top:2px;width:22px;height:9px;
+  border:2.5px solid #8b8b93;border-right:none;border-radius:8px 0 0 8px;
+  box-shadow:inset 1px 1px 1px rgba(255,255,255,.7);
+}
+
+/* ===== header ===== */
+.head{position:relative;margin-bottom:22px}
+.washi{
+  position:absolute;right:-18px;top:-46px;width:118px;height:30px;transform:rotate(6deg);
+  background:repeating-linear-gradient(135deg,#f6b8a4 0 7px,#fbd2c5 7px 14px);opacity:.85;
+  box-shadow:0 1px 3px rgba(0,0,0,.15);
+  clip-path:polygon(0 0,100% 0,97% 25%,100% 50%,97% 75%,100% 100%,0 100%,3% 75%,0 50%,3% 25%);
+}
+.head h1{
+  font-family:'Klee One',cursive;font-weight:600;font-size:30px;line-height:1.25;margin:0 0 6px;letter-spacing:.02em;
+}
+.head h1 .hl{
+  background:linear-gradient(transparent 55%,rgba(255,200,120,.55) 55% 92%,transparent 92%);
+  padding:0 2px;
+}
+.head p{margin:0;color:var(--pencil);font-size:14px}
+
+.badge{
+  position:absolute;right:-6px;top:6px;width:84px;height:84px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  color:var(--stamp);transform:rotate(8deg);
+}
+.badge svg{position:absolute;inset:0;width:100%;height:100%}
+.badge .num{font-family:'Zen Maru Gothic',sans-serif;font-weight:700;font-size:22px;line-height:1;position:relative}
+.badge .lab{font-size:10.5px;position:relative;margin-top:2px}
+
+/* ===== list rows on ruled lines ===== */
+.rows{margin-top:6px}
+.row{
+  position:relative;display:grid;grid-template-columns:30px 1fr 46px;gap:10px;align-items:start;
+  padding:12px 0 11px;border-bottom:1.5px solid var(--rule);
+}
+.row:first-child{border-top:1.5px solid var(--rule)}
+.check{
+  background:none;border:none;padding:0;width:30px;height:30px;cursor:pointer;margin-top:-2px;
+}
+.check svg{width:30px;height:30px;display:block}
+.txt{font-size:16.5px;line-height:1.5;word-break:break-word;cursor:text}
+.row.done .txt{color:var(--pencil);text-decoration:line-through;text-decoration-thickness:1.5px}
+.edit-input{
+  width:100%;font-family:inherit;font-size:16.5px;line-height:1.5;color:var(--ink);
+  background:transparent;border:none;border-bottom:1.5px dashed var(--stamp);padding:0 0 2px;
+}
+.edit-input:focus{outline:none}
+.row-actions{display:flex;flex-direction:column;align-items:flex-end;gap:6px;margin-top:2px}
+.meta{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;align-items:center}
+.pill{
+  font-family:'Zen Maru Gothic',sans-serif;font-weight:500;font-size:11px;padding:2px 9px;border-radius:999px;color:rgba(58,53,51,.8);
+}
+.pill.food{background:var(--tab-food)}
+.pill.out{background:var(--tab-out)}
+.pill.home{background:var(--tab-home)}
+.pill.event{background:var(--tab-event)}
+.pill.season{background:transparent;border:1.5px dashed #d9cfc2;color:var(--pencil)}
+.pill.doing{background:transparent;border:1.5px solid #f0a184;color:#c9663f}
+
+.memo-btn{
+  font-family:inherit;font-size:12.5px;color:#7a8bb8;background:none;border:none;padding:0;cursor:pointer;margin-top:6px;
+  border-bottom:1px dashed #b7c3dd;
+}
+.erase{
+  background:none;border:none;color:var(--pencil);opacity:.35;cursor:pointer;font-size:14px;padding:2px;
+}
+.erase:hover{opacity:1;color:var(--stamp)}
+
+/* 済 stamp */
+.stamp{
+  position:absolute;right:26px;top:4px;width:62px;height:62px;pointer-events:none;
+  transform:rotate(-14deg);opacity:.85;
+  animation:stampIn .35s cubic-bezier(.2,1.4,.5,1) both;
+}
+.stamp svg{width:100%;height:100%}
+@keyframes stampIn{
+  0%{transform:rotate(-14deg) scale(1.9);opacity:0}
+  60%{opacity:.9}
+  100%{transform:rotate(-14deg) scale(1);opacity:.85}
+}
+
+/* sticky note memo */
+.sticky{
+  display:none;position:relative;margin:12px 0 4px 2px;padding:14px 14px 12px;
+  background:var(--sticky);transform:rotate(-1.2deg);
+  box-shadow:1px 3px 8px rgba(80,60,10,.18);
+  border-radius:2px;
+}
+.sticky.open{display:block}
+.sticky::before{
+  content:"";position:absolute;top:-9px;left:50%;transform:translateX(-50%) rotate(-2deg);
+  width:56px;height:16px;background:rgba(255,255,255,.55);box-shadow:0 1px 2px rgba(0,0,0,.08);
+}
+.sticky textarea{
+  width:100%;min-height:64px;resize:vertical;background:transparent;border:none;
+  font-family:inherit;font-size:14px;line-height:1.6;color:var(--ink);
+  background-image:repeating-linear-gradient(transparent 0 21px,rgba(0,0,0,.08) 21px 22px);
+  background-attachment:local;
+}
+.sticky textarea:focus{outline:none}
+
+.empty{color:var(--pencil);font-size:14px;padding:26px 0;text-align:center}
+
+/* ===== add row ===== */
+.add{margin-top:6px}
+.add-trigger{
+  width:100%;text-align:left;background:none;border:none;border-bottom:1.5px solid var(--rule);
+  font-family:inherit;font-size:16px;color:#b3a9a2;padding:14px 0 12px 40px;cursor:pointer;position:relative;
+}
+.add-trigger::before{
+  content:"+";position:absolute;left:4px;top:8px;width:26px;height:26px;border-radius:50%;
+  border:1.8px dashed #c9bdb2;color:#b3a9a2;font-size:18px;line-height:24px;text-align:center;
+}
+.add-trigger:hover{color:var(--ink)}
+.form{display:none;padding:12px 0 4px}
+.form.open{display:block}
+.form input[type=text]{
+  width:100%;background:transparent;border:none;border-bottom:1.5px solid #9fb2cc;
+  font-family:inherit;font-size:17px;color:var(--ink);padding:8px 2px;
+}
+.form input[type=text]:focus{outline:none;border-bottom-color:var(--stamp)}
+.form input::placeholder{color:#c2b8b0}
+.fl{font-family:'Zen Maru Gothic',sans-serif;font-size:11.5px;color:var(--pencil);margin:14px 0 6px}
+.picks{display:flex;flex-wrap:wrap;gap:6px}
+.pick{
+  border:1.5px solid #e3d9cc;background:transparent;font-family:'Zen Maru Gothic',sans-serif;font-size:12.5px;
+  padding:5px 12px;border-radius:999px;cursor:pointer;color:var(--pencil);transition:all .12s;
+}
+.pick.sel{border-color:transparent;color:var(--ink)}
+.pick.sel[data-val="食"]{background:var(--tab-food)}
+.pick.sel[data-val="お出かけ"]{background:var(--tab-out)}
+.pick.sel[data-val="おうち"]{background:var(--tab-home)}
+.pick.sel[data-val="イベント"]{background:var(--tab-event)}
+.pick.sel.s{background:#f4ede1}
+.actions{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+.btn{font-family:'Zen Maru Gothic',sans-serif;font-weight:700;font-size:13.5px;border-radius:999px;padding:9px 20px;cursor:pointer;border:none}
+.btn.ghost{background:transparent;color:var(--pencil)}
+.btn.go{background:var(--ink);color:#fff;box-shadow:0 3px 0 #1f1b1a}
+.btn.go:active{transform:translateY(2px);box-shadow:0 1px 0 #1f1b1a}
+
+.foot{display:flex;justify-content:space-between;align-items:center;margin-top:22px;font-size:12px;color:var(--pencil)}
+.foot label{display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none}
+.foot input{accent-color:var(--stamp)}
+.msg{min-height:14px}
+
+/* page curl */
+.curl{
+  position:absolute;right:0;bottom:0;width:44px;height:44px;border-radius:14px 0 14px 0;
+  background:linear-gradient(135deg,transparent 50%,#efe7d6 50%,#d9cfbb 100%);
+  box-shadow:-3px -3px 6px rgba(0,0,0,.06);pointer-events:none;
+}
+
+@media (max-width:420px){
+  .paper{padding:30px 18px 26px 56px}
+  .tabs{padding-left:40px;gap:4px}
+  .tab{font-size:11.5px;padding:8px 10px 15px}
+  .head h1{font-size:25px}
+  .badge{width:72px;height:72px;top:2px}
+  .badge .num{font-size:19px}
+  .washi{width:96px;top:-42px}
+  .stamp{right:10px}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="book">
+
+  <div class="tabs" id="tabs">
+    <button class="tab all active" data-cat="all">すべて</button>
+    <button class="tab food" data-cat="食">食</button>
+    <button class="tab out" data-cat="お出かけ">お出かけ</button>
+    <button class="tab home" data-cat="おうち">おうち</button>
+    <button class="tab event" data-cat="イベント">イベント</button>
+  </div>
+
+  <div class="paper">
+    <div class="holes" id="holes"></div>
+
+    <div class="head">
+      <div class="washi"></div>
+      <h1>ふたりの<br><span class="hl">やりたいことリスト</span></h1>
+      <p>叶えたら、済のハンコを押していこう。</p>
+      <div class="badge" id="badge">
+        <svg viewBox="0 0 84 84" fill="none">
+          <path d="M42 5c21 0 36 15 36 36 0 22-16 38-37 38C20 79 5 63 5 42 5 21 21 5 42 5z" stroke="#D8433F" stroke-width="2" stroke-dasharray="3 2.5" opacity=".9"/>
+          <path d="M42 11c17 0 30 13 30 30 0 18-13 32-31 32S11 59 11 41c0-17 14-30 31-30z" stroke="#D8433F" stroke-width="1.2" opacity=".6"/>
+        </svg>
+        <div class="num" id="badgeNum">0/0</div>
+        <div class="lab">達成</div>
+      </div>
+    </div>
+
+    <div class="rows" id="rows"></div>
+
+    <div class="add">
+      <button class="add-trigger" id="addTrigger">新しいやりたいことを書く…</button>
+      <div class="form" id="form">
+        <input type="text" id="newText" placeholder="例：温泉旅行に行く" maxlength="80">
+        <div class="fl">カテゴリ（複数OK）</div>
+        <div class="picks" id="catPick">
+          <button class="pick" data-val="食">食</button>
+          <button class="pick" data-val="お出かけ">お出かけ</button>
+          <button class="pick" data-val="おうち">おうち</button>
+          <button class="pick" data-val="イベント">イベント</button>
+        </div>
+        <div class="fl">季節</div>
+        <div class="picks" id="seasonPick">
+          <button class="pick s sel" data-val="">いつでも</button>
+          <button class="pick s" data-val="春">🌸 春</button>
+          <button class="pick s" data-val="夏">🌻 夏</button>
+          <button class="pick s" data-val="秋">🍁 秋</button>
+          <button class="pick s" data-val="冬">❄️ 冬</button>
+        </div>
+        <div class="actions">
+          <button class="btn ghost" id="cancelAdd">やめる</button>
+          <button class="btn go" id="saveAdd">リストに書く</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="foot">
+      <label><input type="checkbox" id="showDone" checked> 済のものも見せる</label>
+      <div class="msg" id="msg"></div>
+    </div>
+
+    <div class="curl"></div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   ここにFirebaseの設定を貼り付けてください
+   (Firebaseコンソール → プロジェクトの設定 → 全般 → マイアプリ
+    → ウェブアプリを追加 → 出てくるfirebaseConfigをコピペ)
+   ============================================================ */
+const firebaseConfig = {
+  apiKey: "AIzaSyCyJgrtA92IRLmxBmiYkxvUtBjoMrFiVUE",
+  authDomain: "haruna-daichi.firebaseapp.com",
+  projectId: "haruna-daichi",
+  storageBucket: "haruna-daichi.firebasestorage.app",
+  messagingSenderId: "640412529454",
+  appId: "1:640412529454:web:49a0be70ba82a29eb640bf",
+  measurementId: "G-L4SZKXW3LG"
+};
+// 保存先のドキュメントを分ける名前。2人だけの合言葉的なものにすると安心
+const DOC_ID = 'futari-list';
+
+let db = null;
+let analytics = null;
+let configOk = firebaseConfig.apiKey && !firebaseConfig.apiKey.startsWith('YOUR_');
+if(configOk){
+  try{
+    firebase.initializeApp(firebaseConfig);
+    if(typeof firebase.analytics === 'function'){
+      analytics = firebase.analytics();
+    }
+    db = firebase.firestore();
+  }catch(e){ configOk=false; }
+}
+
+const SEED=[
+ {id:'s1',text:'紅葉を見に行くこと',categories:['お出かけ'],season:'秋',status:'todo',note:'',doneAt:''},
+ {id:'s2',text:'タコパ',categories:['食','おうち'],season:'',status:'todo',note:'',doneAt:''},
+ {id:'s3',text:'料理本を買って2人で料理研究すること',categories:['食','おうち'],season:'',status:'todo',note:'',doneAt:''},
+ {id:'s4',text:'100均に行って、料理道具とか家に必要そうなものをめっちゃ買うこと',categories:['おうち'],season:'',status:'todo',note:'',doneAt:''},
+ {id:'s5',text:'ビリヤニを食べに行くこと',categories:['食'],season:'',status:'todo',note:'',doneAt:''},
+ {id:'s6',text:'ちいかわ',categories:['イベント'],season:'',status:'done',note:'',doneAt:'2026.09'},
+];
+let items=[],cat='all',showDone=true;
+const cls={'食':'food','お出かけ':'out','おうち':'home','イベント':'event'};
+const sea={'春':'🌸 春','夏':'🌻 夏','秋':'🍁 秋','冬':'❄️ 冬'};
+const rows=document.getElementById('rows'),msg=document.getElementById('msg');
+
+// spiral holes
+const holes=document.getElementById('holes');
+for(let i=0;i<9;i++){const h=document.createElement('div');h.className='hole';holes.appendChild(h);}
+
+function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+function today(){const d=new Date();return d.getFullYear()+'.'+String(d.getMonth()+1).padStart(2,'0')+'.'+String(d.getDate()).padStart(2,'0');}
+
+function checkSvg(st){
+  const box='<path d="M6 5.5c6-1 12-1 18 0 .8 6 .8 12 0 18-6 1-12 1-18 0-.8-6-.8-12 0-18z"';
+  if(st==='done')return `<svg viewBox="0 0 30 30" fill="none">${box} stroke="#9C948F" stroke-width="1.6"/><path d="M8 15.5l4.5 4.5L23 9" stroke="#D8433F" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+  if(st==='doing')return `<svg viewBox="0 0 30 30" fill="none">${box} stroke="#3A3533" stroke-width="1.6"/><path d="M8 20l12-12" stroke="#f0a184" stroke-width="2.4" stroke-linecap="round"/></svg>`;
+  return `<svg viewBox="0 0 30 30" fill="none">${box} stroke="#3A3533" stroke-width="1.6"/></svg>`;
+}
+function stampSvg(date){
+  return `<svg viewBox="0 0 62 62" fill="none">
+    <path d="M31 3c16 0 28 12 28 28 0 17-12 28-28 28S3 47 3 31C3 15 15 3 31 3z" stroke="#D8433F" stroke-width="2.4"/>
+    <path d="M31 9c12 0 22 10 22 22S43 53 31 53 9 43 9 31 19 9 31 9z" stroke="#D8433F" stroke-width="1"/>
+    <text x="31" y="36" text-anchor="middle" font-family="Klee One,serif" font-weight="600" font-size="22" fill="#D8433F">済</text>
+    <text x="31" y="47" text-anchor="middle" font-family="Zen Maru Gothic,sans-serif" font-size="6.5" fill="#D8433F">${date||''}</text>
+  </svg>`;
+}
+function next(s){return s==='todo'?'doing':s==='doing'?'done':'todo';}
+
+let saving=false;
+async function save(){
+  if(!configOk||!db)return;
+  saving=true;
+  try{ await db.collection('lists').doc(DOC_ID).set({items}); msg.textContent=''; }
+  catch(e){ msg.textContent='保存できませんでした'; }
+  saving=false;
+}
+
+function startSync(){
+  if(!configOk||!db){
+    msg.textContent='⚠️ まだFirebaseの設定が入っていません。SETUP.mdの手順を見てね';
+    items=SEED;render();
+    return;
+  }
+  db.collection('lists').doc(DOC_ID).onSnapshot(async doc=>{
+    if(doc.exists && doc.data().items){
+      items=doc.data().items;
+      render();
+    } else if(!saving){
+      items=SEED;
+      await save();
+    }
+  }, err=>{
+    msg.textContent='接続できませんでした。設定を確認してね';
+  });
+}
+
+function render(){
+  const list=items.filter(i=>(cat==='all'||i.categories.includes(cat))&&(showDone||i.status!=='done'));
+  const done=items.filter(i=>i.status==='done').length;
+  document.getElementById('badgeNum').textContent=`${done}/${items.length}`;
+  if(!list.length){rows.innerHTML=`<div class="empty">まだ何も書いてないよ。下の行に書いてみて ✎</div>`;return;}
+  rows.innerHTML=list.map(it=>`
+    <div class="row ${it.status==='done'?'done':''}" data-id="${it.id}">
+      <button class="check" data-a="st" aria-label="状態を変える">${checkSvg(it.status)}</button>
+      <div>
+        <div class="txt" data-a="edit" title="タップして編集">${esc(it.text)}</div>
+        <div class="meta">
+          ${it.categories.map(c=>`<span class="pill ${cls[c]}">${c}</span>`).join('')}
+          ${it.season?`<span class="pill season">${sea[it.season]||it.season}</span>`:''}
+          ${it.status==='doing'?`<span class="pill doing">計画中</span>`:''}
+        </div>
+        <button class="memo-btn" data-a="memo">${it.note?'メモを開く':'メモを貼る（お店の候補・予算など）'}</button>
+        <div class="sticky" data-r="sticky"><textarea data-a="note" placeholder="ここに書く…">${esc(it.note||'')}</textarea></div>
+      </div>
+      <div class="row-actions">
+        <button class="erase" data-a="edit" title="編集">✎</button>
+        <button class="erase" data-a="del" title="消す">✕</button>
+      </div>
+      ${it.status==='done'?`<div class="stamp">${stampSvg(it.doneAt)}</div>`:''}
+    </div>`).join('');
+}
+
+rows.addEventListener('click',async e=>{
+  const row=e.target.closest('.row');if(!row)return;
+  const it=items.find(i=>i.id===row.dataset.id);if(!it)return;
+  const a=e.target.closest('[data-a]')?.dataset.a;
+  if(a==='st'){it.status=next(it.status);it.doneAt=it.status==='done'?today():'';render();await save();}
+  else if(a==='del'){items=items.filter(i=>i.id!==it.id);render();await save();}
+  else if(a==='memo'){const s=row.querySelector('[data-r="sticky"]');s.classList.toggle('open');if(s.classList.contains('open'))s.querySelector('textarea').focus();}
+  else if(a==='edit'){startEdit(row,it);}
+});
+
+function startEdit(row,it){
+  const txtEl=row.querySelector('.txt');
+  if(!txtEl||txtEl.tagName==='INPUT')return;
+  const input=document.createElement('input');
+  input.type='text';input.className='edit-input';input.maxLength=80;input.value=it.text;
+  txtEl.replaceWith(input);input.focus();input.select();
+  let done=false;
+  const commit=async()=>{
+    if(done)return;done=true;
+    const val=input.value.trim();
+    if(val)it.text=val;
+    render();await save();
+  };
+  input.addEventListener('keydown',e=>{
+    if(e.key==='Enter'){e.preventDefault();commit();}
+    if(e.key==='Escape'){done=true;render();}
+  });
+  input.addEventListener('blur',commit);
+}
+rows.addEventListener('focusout',async e=>{
+  if(e.target.dataset.a!=='note')return;
+  const it=items.find(i=>i.id===e.target.closest('.row').dataset.id);
+  if(it&&it.note!==e.target.value){it.note=e.target.value;await save();}
+});
+
+document.getElementById('tabs').addEventListener('click',e=>{
+  const t=e.target.closest('.tab');if(!t)return;
+  document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+  t.classList.add('active');cat=t.dataset.cat;render();
+});
+document.getElementById('showDone').addEventListener('change',e=>{showDone=e.target.checked;render();});
+
+// add form
+const trig=document.getElementById('addTrigger'),form=document.getElementById('form'),inp=document.getElementById('newText');
+let cats=[],season='';
+trig.addEventListener('click',()=>{form.classList.add('open');trig.style.display='none';inp.focus();});
+function reset(){
+  form.classList.remove('open');trig.style.display='block';inp.value='';cats=[];season='';
+  document.querySelectorAll('#catPick .pick').forEach(b=>b.classList.remove('sel'));
+  document.querySelectorAll('#seasonPick .pick').forEach(b=>b.classList.toggle('sel',b.dataset.val===''));
+}
+document.getElementById('cancelAdd').addEventListener('click',reset);
+document.getElementById('catPick').addEventListener('click',e=>{
+  const b=e.target.closest('.pick');if(!b)return;b.classList.toggle('sel');
+  const v=b.dataset.val;cats=cats.includes(v)?cats.filter(c=>c!==v):[...cats,v];
+});
+document.getElementById('seasonPick').addEventListener('click',e=>{
+  const b=e.target.closest('.pick');if(!b)return;
+  document.querySelectorAll('#seasonPick .pick').forEach(x=>x.classList.remove('sel'));b.classList.add('sel');season=b.dataset.val;
+});
+async function add(){
+  const t=inp.value.trim();if(!t){inp.focus();return;}
+  items.unshift({id:'i'+Date.now()+Math.random().toString(36).slice(2,6),text:t,categories:[...cats],season,status:'todo',note:'',doneAt:''});
+  reset();render();await save();
+}
+document.getElementById('saveAdd').addEventListener('click',add);
+inp.addEventListener('keydown',e=>{if(e.key==='Enter')add();});
+
+startSync();
+</script>
+</body>
+</html>
