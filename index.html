@@ -133,7 +133,6 @@ body::before{
   position:relative;display:grid;grid-template-columns:30px 1fr 46px;gap:10px;align-items:start;
   padding:12px 0 11px;border-bottom:1.5px solid var(--rule);
 }
-.row:first-child{border-top:1.5px solid var(--rule)}
 .check{
   background:none;border:none;padding:0;width:30px;height:30px;cursor:pointer;margin-top:-2px;
 }
@@ -202,7 +201,7 @@ body::before{
 .empty{color:var(--pencil);font-size:14px;padding:26px 0;text-align:center}
 
 /* ===== add row ===== */
-.add{margin-top:6px}
+.add{margin-top:0}
 .add-trigger{
   width:100%;text-align:left;background:none;border:none;border-bottom:1.5px solid var(--rule);
   font-family:inherit;font-size:16px;color:#b3a9a2;padding:14px 0 12px 40px;cursor:pointer;position:relative;
@@ -213,7 +212,7 @@ body::before{
 }
 .add-trigger:hover{color:var(--ink)}
 .form{display:none;padding:12px 0 4px}
-.form.open{display:block}
+.form.open{display:block;border-bottom:1.5px solid var(--rule);padding-bottom:14px}
 .form input[type=text]{
   width:100%;background:transparent;border:none;border-bottom:1.5px solid #9fb2cc;
   font-family:inherit;font-size:17px;color:var(--ink);padding:8px 2px;
@@ -249,6 +248,19 @@ body::before{
   background:linear-gradient(135deg,transparent 50%,#efe7d6 50%,#d9cfbb 100%);
   box-shadow:-3px -3px 6px rgba(0,0,0,.06);pointer-events:none;
 }
+
+/* season filter */
+.sfilter{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}
+.sfilter .pick.sel{background:var(--ink);border-color:var(--ink);color:#fff}
+/* edit box */
+.editbox .fl{margin:12px 0 6px}
+.editbox .actions{margin-top:12px}
+.editbox .btn{padding:7px 16px;font-size:12.5px}
+/* pager */
+.pager{display:flex;justify-content:center;align-items:center;gap:14px;margin-top:18px;font-family:'Zen Maru Gothic',sans-serif;font-size:13px;color:var(--pencil)}
+.pager:empty{display:none}
+.pager button{background:none;border:1.5px solid #e3d9cc;border-radius:999px;font-family:inherit;font-size:13px;color:var(--ink);padding:5px 14px;cursor:pointer}
+.pager button:disabled{opacity:.3;cursor:default}
 
 @media (max-width:420px){
   .paper{padding:30px 18px 26px 56px}
@@ -291,7 +303,14 @@ body::before{
       </div>
     </div>
 
-    <div class="rows" id="rows"></div>
+    <div class="sfilter" id="sfilter">
+      <button class="pick s sel" data-val="all">すべての季節</button>
+      <button class="pick s" data-val="春">🌸 春</button>
+      <button class="pick s" data-val="夏">🌻 夏</button>
+      <button class="pick s" data-val="秋">🍁 秋</button>
+      <button class="pick s" data-val="冬">❄️ 冬</button>
+      <button class="pick s" data-val="">いつでも</button>
+    </div>
 
     <div class="add">
       <button class="add-trigger" id="addTrigger">新しいやりたいことを書く…</button>
@@ -318,6 +337,10 @@ body::before{
         </div>
       </div>
     </div>
+
+    <div class="rows" id="rows"></div>
+    <div class="pager" id="pager"></div>
+
 
     <div class="foot">
       <label><input type="checkbox" id="showDone" checked> 済のものも見せる</label>
@@ -367,7 +390,8 @@ const SEED=[
  {id:'s5',text:'ビリヤニを食べに行くこと',categories:['食'],season:'',status:'todo',note:'',doneAt:''},
  {id:'s6',text:'ちいかわ',categories:['イベント'],season:'',status:'done',note:'',doneAt:'2026.09'},
 ];
-let items=[],cat='all',showDone=true;
+let items=[],cat='all',showDone=true,sfil='all',page=0,editing=null;
+const PER=20;
 const cls={'食':'food','お出かけ':'out','おうち':'home','イベント':'event'};
 const sea={'春':'🌸 春','夏':'🌻 夏','秋':'🍁 秋','冬':'❄️ 冬'};
 const rows=document.getElementById('rows'),msg=document.getElementById('msg');
@@ -376,7 +400,8 @@ const rows=document.getElementById('rows'),msg=document.getElementById('msg');
 const holes=document.getElementById('holes');
 for(let i=0;i<9;i++){const h=document.createElement('div');h.className='hole';holes.appendChild(h);}
 
-function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML;}
+function esc(s){const d=document.createElement('div');d.textContent=s;return d.innerHTML.replace(/"/g,'&quot;');}
+function composing(e){return e.isComposing||e.keyCode===229;}
 function today(){const d=new Date();return d.getFullYear()+'.'+String(d.getMonth()+1).padStart(2,'0')+'.'+String(d.getDate()).padStart(2,'0');}
 
 function checkSvg(st){
@@ -424,14 +449,36 @@ function startSync(){
 }
 
 function render(){
-  const list=items.filter(i=>(cat==='all'||i.categories.includes(cat))&&(showDone||i.status!=='done'));
+  const list=items.filter(i=>(cat==='all'||i.categories.includes(cat))&&(sfil==='all'||(i.season||'')===sfil)&&(showDone||i.status!=='done'));
   const done=items.filter(i=>i.status==='done').length;
   document.getElementById('badgeNum').textContent=`${done}/${items.length}`;
-  if(!list.length){rows.innerHTML=`<div class="empty">まだ何も書いてないよ。下の行に書いてみて ✎</div>`;return;}
-  rows.innerHTML=list.map(it=>`
-    <div class="row ${it.status==='done'?'done':''}" data-id="${it.id}">
-      <button class="check" data-a="st" aria-label="状態を変える">${checkSvg(it.status)}</button>
-      <div>
+  const pages=Math.max(1,Math.ceil(list.length/PER));
+  if(page>=pages)page=pages-1;
+  renderPager(pages);
+  if(!list.length){
+    rows.innerHTML=`<div class="empty">${items.length?'この条件のやりたいことはまだないよ':'まだ何も書いてないよ。上の行に書いてみて ✎'}</div>`;
+    return;
+  }
+  rows.innerHTML=list.slice(page*PER,page*PER+PER).map(rowHtml).join('');
+}
+
+function picksHtml(it){
+  const cs=['食','お出かけ','おうち','イベント'].map(c=>`<button class="pick ${it.categories.includes(c)?'sel':''}" data-a="ecat" data-val="${c}">${c}</button>`).join('');
+  const ss=[['','いつでも'],['春','🌸 春'],['夏','🌻 夏'],['秋','🍁 秋'],['冬','❄️ 冬']].map(([v,l])=>`<button class="pick s ${(it.season||'')===v?'sel':''}" data-a="esea" data-val="${v}">${l}</button>`).join('');
+  return `<div class="fl">カテゴリ（複数OK）</div><div class="picks">${cs}</div><div class="fl">季節</div><div class="picks">${ss}</div>`;
+}
+
+function rowHtml(it){
+  const ed=editing&&editing.id===it.id;
+  const body=ed?`
+        <div class="editbox">
+          <input type="text" class="edit-input" data-r="etext" maxlength="80" value="${esc(editing.text)}">
+          ${picksHtml(editing)}
+          <div class="actions">
+            <button class="btn ghost" data-a="ecancel">やめる</button>
+            <button class="btn go" data-a="esave">保存する</button>
+          </div>
+        </div>`:`
         <div class="txt" data-a="edit" title="タップして編集">${esc(it.text)}</div>
         <div class="meta">
           ${it.categories.map(c=>`<span class="pill ${cls[c]}">${c}</span>`).join('')}
@@ -439,45 +486,71 @@ function render(){
           ${it.status==='doing'?`<span class="pill doing">計画中</span>`:''}
         </div>
         <button class="memo-btn" data-a="memo">${it.note?'メモを開く':'メモを貼る（お店の候補・予算など）'}</button>
-        <div class="sticky" data-r="sticky"><textarea data-a="note" placeholder="ここに書く…">${esc(it.note||'')}</textarea></div>
+        <div class="sticky" data-r="sticky"><textarea data-a="note" placeholder="ここに書く…">${esc(it.note||'')}</textarea></div>`;
+  return `
+    <div class="row ${it.status==='done'?'done':''}" data-id="${it.id}">
+      <button class="check" data-a="st" aria-label="状態を変える">${checkSvg(it.status)}</button>
+      <div>${body}
       </div>
       <div class="row-actions">
         <button class="erase" data-a="edit" title="編集">✎</button>
         <button class="erase" data-a="del" title="消す">✕</button>
       </div>
       ${it.status==='done'?`<div class="stamp">${stampSvg(it.doneAt)}</div>`:''}
-    </div>`).join('');
+    </div>`;
 }
+
+const pager=document.getElementById('pager');
+function renderPager(pages){
+  if(pages<=1){pager.innerHTML='';return;}
+  pager.innerHTML=`<button data-p="-1" ${page===0?'disabled':''}>← 前へ</button><span>${page+1} / ${pages}</span><button data-p="1" ${page>=pages-1?'disabled':''}>次へ →</button>`;
+}
+pager.addEventListener('click',e=>{
+  const b=e.target.closest('[data-p]');if(!b||b.disabled)return;
+  page+=Number(b.dataset.p);editing=null;render();
+  document.querySelector('.paper').scrollIntoView({behavior:'smooth',block:'start'});
+});
 
 rows.addEventListener('click',async e=>{
   const row=e.target.closest('.row');if(!row)return;
   const it=items.find(i=>i.id===row.dataset.id);if(!it)return;
-  const a=e.target.closest('[data-a]')?.dataset.a;
+  const el=e.target.closest('[data-a]');const a=el?.dataset.a;
   if(a==='st'){it.status=next(it.status);it.doneAt=it.status==='done'?today():'';render();await save();}
-  else if(a==='del'){items=items.filter(i=>i.id!==it.id);render();await save();}
+  else if(a==='del'){if(editing&&editing.id===it.id)editing=null;items=items.filter(i=>i.id!==it.id);render();await save();}
   else if(a==='memo'){const s=row.querySelector('[data-r="sticky"]');s.classList.toggle('open');if(s.classList.contains('open'))s.querySelector('textarea').focus();}
-  else if(a==='edit'){startEdit(row,it);}
+  else if(a==='edit'){
+    if(editing&&editing.id===it.id)return;
+    editing={id:it.id,text:it.text,categories:[...it.categories],season:it.season||''};
+    render();
+    const inpE=rows.querySelector('[data-r="etext"]');if(inpE){inpE.focus();inpE.select();}
+  }
+  else if(a==='ecat'&&editing){
+    const v=el.dataset.val;
+    editing.categories=editing.categories.includes(v)?editing.categories.filter(c=>c!==v):[...editing.categories,v];
+    el.classList.toggle('sel');
+  }
+  else if(a==='esea'&&editing){
+    editing.season=el.dataset.val;
+    row.querySelectorAll('[data-a="esea"]').forEach(b=>b.classList.toggle('sel',b===el));
+  }
+  else if(a==='ecancel'){editing=null;render();}
+  else if(a==='esave'){await commitEdit();}
 });
 
-function startEdit(row,it){
-  const txtEl=row.querySelector('.txt');
-  if(!txtEl||txtEl.tagName==='INPUT')return;
-  const input=document.createElement('input');
-  input.type='text';input.className='edit-input';input.maxLength=80;input.value=it.text;
-  txtEl.replaceWith(input);input.focus();input.select();
-  let done=false;
-  const commit=async()=>{
-    if(done)return;done=true;
-    const val=input.value.trim();
-    if(val)it.text=val;
-    render();await save();
-  };
-  input.addEventListener('keydown',e=>{
-    if(e.key==='Enter'){e.preventDefault();commit();}
-    if(e.key==='Escape'){done=true;render();}
-  });
-  input.addEventListener('blur',commit);
+async function commitEdit(){
+  if(!editing)return;
+  const it=items.find(i=>i.id===editing.id);
+  const t=editing.text.trim();
+  if(!t){rows.querySelector('[data-r="etext"]')?.focus();return;}
+  if(it){it.text=t;it.categories=[...editing.categories];it.season=editing.season;}
+  editing=null;render();await save();
 }
+rows.addEventListener('input',e=>{if(e.target.dataset.r==='etext'&&editing)editing.text=e.target.value;});
+rows.addEventListener('keydown',e=>{
+  if(e.target.dataset.r!=='etext'||composing(e))return;
+  if(e.key==='Enter'){e.preventDefault();commitEdit();}
+  if(e.key==='Escape'){editing=null;render();}
+});
 rows.addEventListener('focusout',async e=>{
   if(e.target.dataset.a!=='note')return;
   const it=items.find(i=>i.id===e.target.closest('.row').dataset.id);
@@ -487,9 +560,14 @@ rows.addEventListener('focusout',async e=>{
 document.getElementById('tabs').addEventListener('click',e=>{
   const t=e.target.closest('.tab');if(!t)return;
   document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
-  t.classList.add('active');cat=t.dataset.cat;render();
+  t.classList.add('active');cat=t.dataset.cat;page=0;render();
 });
-document.getElementById('showDone').addEventListener('change',e=>{showDone=e.target.checked;render();});
+document.getElementById('showDone').addEventListener('change',e=>{showDone=e.target.checked;page=0;render();});
+document.getElementById('sfilter').addEventListener('click',e=>{
+  const b=e.target.closest('.pick');if(!b)return;
+  document.querySelectorAll('#sfilter .pick').forEach(x=>x.classList.toggle('sel',x===b));
+  sfil=b.dataset.val;page=0;render();
+});
 
 // add form
 const trig=document.getElementById('addTrigger'),form=document.getElementById('form'),inp=document.getElementById('newText');
@@ -512,10 +590,10 @@ document.getElementById('seasonPick').addEventListener('click',e=>{
 async function add(){
   const t=inp.value.trim();if(!t){inp.focus();return;}
   items.unshift({id:'i'+Date.now()+Math.random().toString(36).slice(2,6),text:t,categories:[...cats],season,status:'todo',note:'',doneAt:''});
-  reset();render();await save();
+  reset();page=0;render();await save();
 }
 document.getElementById('saveAdd').addEventListener('click',add);
-inp.addEventListener('keydown',e=>{if(e.key==='Enter')add();});
+inp.addEventListener('keydown',e=>{if(e.key==='Enter'&&!composing(e))add();});
 
 startSync();
 </script>
